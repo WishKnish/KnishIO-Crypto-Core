@@ -1,0 +1,7 @@
+_kcore_shake256
+_kcore_chains_hex
+_kcore_wots_address
+_kcore_mlkem1024_keypair
+_kcore_mlkem1024_encaps
+_kcore_mlkem1024_decaps
+_kcore_abi_version

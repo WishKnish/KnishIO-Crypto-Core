@@ -1,0 +1,9 @@
+# KnishIO Crypto Core package configuration.
+#
+# Targets: KnishIO::kcore (shared) and KnishIO::kcore-static. No dependencies.
+
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/KnishIOCryptoCoreTargets.cmake")
+
+check_required_components(KnishIOCryptoCore)

@@ -1,0 +1,31 @@
+# clang-tidy lint gate for KnishIO-Crypto-Core (kcore); copied from the KnishIO C SDK gate.
+#
+# Pragmatic baseline: enable the high-value real-bug families (bugprone, performance) and
+# leave the style firehose OFF (readability/modernize/cert/misc/llvm — magic-numbers, casts,
+# naming) — mirrors the Rust clippy::all-not-pedantic (c111) + C++ clang-tidy (c114) philosophy.
+# Read-only gate (no --fix). Scope: src/kcore.c plus tests/kcore_selftest.c and
+# tests/kcore_loadtest.c, driven by the CMake `lint` target; vendored external/mlkem-native is
+# excluded by the file list + the header filters below.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-switch-missing-default-case,
+  -bugprone-reserved-identifier,
+  -bugprone-empty-catch,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-unchecked-string-to-number-conversion,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-branch-clone
+# (C-idiom relaxations: multi-level-implicit-pointer-conversion floods on void**/generic
+#  pointers; assignment-in-if-condition flags the standard `if ((e = f()) != SUCCESS) goto cleanup`
+#  error-handling idiom; unchecked-string-to-number flags atoi/atoll/sscanf on the SDK's OWN
+#  trusted serialized values + hex; implicit-widening flags bounded `idx*sizeof`/constant multiplies
+#  [the real overflow guard is knishio_safe_mul_size_t]; branch-clone flags intentional dup enum cases.)
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(src|include|tests)/.*'
+ExcludeHeaderFilterRegex: '.*/(external|third_party)/.*'
+FormatStyle: none

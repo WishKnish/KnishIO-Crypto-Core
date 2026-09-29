@@ -1,0 +1,6 @@
+/build*/
+/dist/
+/.toolchains/
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,3 @@
+#!/bin/sh
+# CMAKE_RANLIB for the zig toolchains: CMake runs this path as a single program.
+exec zig ranlib "$@"

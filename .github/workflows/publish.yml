@@ -1,0 +1,182 @@
+# kcore publish — tag-driven GitHub Releases. Push a bare semver tag (e.g. `0.1.0`, no `v`
+# prefix) -> version-consistency gate -> the full build/test matrix on real runners
+# (.github/workflows/build.yml, the same one ci.yml runs) -> source tarball -> GitHub Release.
+#
+# Distribution channel: GitHub Releases only. Each release carries one package per target
+# (knishio-crypto-core-<ver>-<target>.tar.gz: linux-{x64,arm64}-{gnu,musl}, darwin-universal,
+# windows-x64, android-arm64-v8a, wasm32), each with a SHAKE256SUMS manifest (FIPS 202) over every
+# shipped file, plus the buildable source tarball. The kcore-tests-* bundles are CI-only and are
+# never released.
+#
+# No OIDC/trusted-publishing here -- there is no registry to authenticate to, so auth is just
+# GITHUB_TOKEN with `contents: write` to create the Release. Deliberately no top-level
+# `environment:` key: a GitHub deployment environment configured "protected branches only"
+# REJECTS tag-triggered deploys. If an environment is added later, it must explicitly allow tags.
+#
+# Source distribution: knishio-crypto-core-<ver>-src.tar.gz, made by
+# .github/scripts/make-source-tarball.py from the tagged tree including the pinned
+# external/mlkem-native submodule (tracked files only, no git history), with a SHAKE256SUMS
+# manifest inside. The `source` job builds it and runs ctest from an extracted copy, isolated from
+# the checkout, before the Release exists. GitHub's automatic "Source code" archive omits the
+# submodule and cannot build.
+name: Publish
+
+on:
+  push:
+    tags:
+      - '[0-9]*'
+  # Dry run. This workflow is otherwise reachable only by pushing a tag, which publishes — so
+  # every change to it would ship unexercised. A dispatch runs the gate and the full
+  # build/self-test/package path and stops before the release, because the release job is
+  # guarded on `github.event_name == 'push'`.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version to dry-run the gate against, e.g. 0.1.1. Releases NOTHING.'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # create the GitHub Release; no registry auth needed
+
+jobs:
+  version-gate:
+    name: verify tag matches declared SDK version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      # persist-credentials: false (2026-08) — nothing here pushes; the Release uses GITHUB_TOKEN, not git config.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Three places declare "what version is this": CMakeLists.txt's project(... VERSION ...),
+      # KCORE_VERSION_STRING and KCORE_VERSION_MAJOR/MINOR/PATCH in include/kcore.h. A release must
+      # never ship a version it doesn't itself claim. Fail here, before anything is built.
+      # Logic lives in .github/scripts/check-version.sh so it can be run locally and by CI on
+      # every push, not only when a tag is pushed. A gate reachable only through a release is
+      # a gate that ships unproven.
+      - name: Verify tag == CMakeLists.txt VERSION == kcore.h KCORE_VERSION_STRING/MAJOR.MINOR.PATCH
+        id: check
+        # DISPATCH_TAG arrives via env, never interpolated into the shell text
+        # (workflow-injection hygiene).
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            EXPECTED="${GITHUB_REF#refs/tags/}"
+          else
+            EXPECTED="$DISPATCH_TAG"
+          fi
+          bash .github/scripts/check-version.sh "$EXPECTED"
+
+  build:
+    name: build
+    needs: version-gate
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version-gate.outputs.version }}
+
+  # The buildable source distribution: the tagged tree plus the pinned external/mlkem-native
+  # submodule, which GitHub's automatic "Source code" archive omits. It is extracted outside
+  # the checkout and built and tested from there, with the runner's default compiler (what a
+  # source consumer gets), before the Release can exist.
+  source:
+    name: source tarball (build + ctest from the extracted archive)
+    needs: version-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: recursive   # the tarball must carry external/mlkem-native
+          persist-credentials: false
+
+      - name: Make source tarball
+        run: python3 .github/scripts/make-source-tarball.py --name knishio-crypto-core --version "${{ needs.version-gate.outputs.version }}" --out dist
+
+      - name: Build + ctest from the extracted tarball (isolated from the checkout)
+        env:
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          SRC="$RUNNER_TEMP/src/knishio-crypto-core-$VERSION-src"
+          mkdir -p "$RUNNER_TEMP/src"
+          tar -xzf "dist/knishio-crypto-core-$VERSION-src.tar.gz" -C "$RUNNER_TEMP/src"
+          cmake -S "$SRC" -B "$RUNNER_TEMP/src-build" -DCMAKE_BUILD_TYPE=Release -DKCORE_BUILD_TESTS=ON
+          cmake --build "$RUNNER_TEMP/src-build" -j"$(nproc)"
+          ctest --test-dir "$RUNNER_TEMP/src-build" --output-on-failure
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: source
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: create GitHub Release
+    needs: [version-gate, build, source]
+    if: github.event_name == 'push'   # dispatch = dry run; never creates a Release
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout leads, before download-artifact: `actions/checkout` defaults to clean: true
+      # (`git clean -ffdx && git reset --hard`), so running it second would delete the
+      # downloaded dist/. It is here only so the CHANGELOG extraction below has a CHANGELOG.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only the pkg-* packages and the source tarball; the tests-* bundles are never released.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          pattern: pkg-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: source
+          path: dist
+          merge-multiple: true
+
+      # Release body = this tag's CHANGELOG.md section, NOT generate_release_notes.
+      # generate_release_notes builds "What's Changed" from merged PULL REQUESTS in the tag
+      # range. Releases here land as direct pushes to master, so the only PR in 0.9.4..1.0.0
+      # was a dependabot github-actions group bump (#2) — and the 1.0.0 release page advertised
+      # that CI bump while saying nothing about the work the release actually shipped. The
+      # curated CHANGELOG entry is the source of truth; extract it and use it verbatim.
+      #
+      # This runs BEFORE the Release is created on purpose: the empty-section guard below is
+      # only useful if it aborts ahead of it. Extraction needs nothing but the checkout.
+      - name: Extract this tag's CHANGELOG section
+        run: |
+          set -euo pipefail
+          # Derived from the tag itself, tolerating a leading `v`, so this needs no cross-job
+          # output plumbing through the package matrix.
+          TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          awk -v ver="## [$TAG_VERSION]" '
+            index($0, ver) == 1 { inside = 1; print; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "::error file=CHANGELOG.md::No '## [$TAG_VERSION]' section found — refusing to publish with empty release notes."
+            exit 1
+          fi
+          echo "Release notes for $TAG_VERSION:"
+          cat /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
+        with:
+          # `generate_release_notes` stays OFF, deliberately — do not restore it. The action
+          # appends the WHOLE generated block (`<body>\n\n<notes>`), which would put the
+          # "bump …(dependabot)" bullets back on the page; demoting reported-bad content is
+          # not removing it. The only real loss is the "Full Changelog" compare link, and
+          # synthesizing that needs the previous tag — i.e. fetch-depth: 0 on a publish job —
+          # which is not worth a full-history clone for a cosmetic link.
+          body_path: /tmp/release-notes.md
+          files: dist/*.tar.gz
