@@ -143,10 +143,10 @@ jobs:
 
       # Release body = this tag's CHANGELOG.md section, NOT generate_release_notes.
       # generate_release_notes builds "What's Changed" from merged PULL REQUESTS in the tag
-      # range. Releases here land as direct pushes to master, so the only PR in 0.9.4..1.0.0
-      # was a dependabot github-actions group bump (#2) — and the 1.0.0 release page advertised
-      # that CI bump while saying nothing about the work the release actually shipped. The
-      # curated CHANGELOG entry is the source of truth; extract it and use it verbatim.
+      # range. Releases here land as direct pushes to main, so that list would hold only
+      # dependabot bumps and nothing the release shipped (this happened to the KnishIO C SDK's
+      # 1.0.0 release page). The curated CHANGELOG entry is the source of truth; extract it and
+      # use it verbatim.
       #
       # This runs BEFORE the Release is created on purpose: the empty-section guard below is
       # only useful if it aborts ahead of it. Extraction needs nothing but the checkout.

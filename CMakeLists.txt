@@ -163,8 +163,10 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/KnishIOCryptoCore)
 
 # prefix is derived from the .pc file's own location (${pcfiledir}), so the installed package
-# works wherever it is extracted.
-file(RELATIVE_PATH KCORE_PC_RELPREFIX "/${CMAKE_INSTALL_LIBDIR}/pkgconfig" "/")
+# works wherever it is extracted. Both paths are rooted at the build directory because "/" is
+# not a full path on a Windows host.
+file(RELATIVE_PATH KCORE_PC_RELPREFIX
+    "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/pkgconfig" "${CMAKE_BINARY_DIR}")
 string(REGEX REPLACE "/$" "" KCORE_PC_RELPREFIX "${KCORE_PC_RELPREFIX}")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/knishio-crypto-core.pc.in knishio-crypto-core.pc @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/knishio-crypto-core.pc

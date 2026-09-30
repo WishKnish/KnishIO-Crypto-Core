@@ -38,4 +38,4 @@ in the KnishIOClientSDK monorepo.
 - CI on real runners (Linux x64/arm64, macOS arm64/x86_64, Windows x64) and a tag-triggered
   GitHub Release workflow.
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Crypto-Core/commits/master
+[Unreleased]: https://github.com/WishKnish/KnishIO-Crypto-Core/commits/main
