@@ -2,9 +2,9 @@
  * kcore_loadtest <shared-library-path>
  *
  * Loads libkcore dynamically the way every FFI binding does (dlopen / LoadLibraryA), resolves the
- * seven exported kcore_* symbols, requires kcore_abi_version() == 1 and runs two known answers:
- * SHAKE256("") -> 32 bytes (canonical vector empty_string_32_bytes) and an ML-KEM-1024
- * keypair/encaps/decaps round trip. Prints "LOADTEST ok" or "LOADTEST FAIL <step>".
+ * ten exported kcore_* symbols, requires kcore_abi_version() == 1 and runs known answers:
+ * SHAKE256("") -> 32 bytes (canonical vector empty_string_32_bytes) and ML-KEM-1024 and ML-KEM-768
+ * keypair/encaps/decaps round trips. Prints "LOADTEST ok" or "LOADTEST FAIL <step>".
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -36,9 +36,11 @@ static int fail(const char *step) {
 int main(int argc, char **argv) {
     static const char *names[] = {"kcore_shake256",          "kcore_chains_hex",       "kcore_wots_address",
                                   "kcore_mlkem1024_keypair", "kcore_mlkem1024_encaps", "kcore_mlkem1024_decaps",
-                                  "kcore_abi_version"};
+                                  "kcore_abi_version",       "kcore_mlkem768_keypair", "kcore_mlkem768_encaps",
+                                  "kcore_mlkem768_decaps"};
+    enum { NSYM = sizeof names / sizeof names[0] };
     static const char expect[] = "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f";
-    void *sym[7];
+    void *sym[NSYM];
     uint8_t out[32], seed[64] = {0}, coins[32] = {0}, pk[1568], sk[3168], ct[1568], ss[32], dss[32];
     char hex[65];
 
@@ -48,7 +50,7 @@ int main(int argc, char **argv) {
     }
     lib_t lib = lib_open(argv[1]);
     if (lib == NULL) return fail("open");
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < NSYM; i++) {
         sym[i] = lib_sym(lib, names[i]);
         if (sym[i] == NULL) return fail(names[i]);
     }
@@ -60,6 +62,11 @@ int main(int argc, char **argv) {
     if (((encaps_fn)sym[4])(pk, coins, ct, ss) != 0) return fail("encaps");
     if (((decaps_fn)sym[5])(ct, sk, dss) != 0) return fail("decaps");
     if (memcmp(ss, dss, sizeof ss) != 0) return fail("roundtrip");
+    /* ML-KEM-768 sizes (1184 / 2400 / 1088) fit the 1024 buffers. */
+    if (((keypair_fn)sym[7])(seed, pk, sk) != 0) return fail("keypair768");
+    if (((encaps_fn)sym[8])(pk, coins, ct, ss) != 0) return fail("encaps768");
+    if (((decaps_fn)sym[9])(ct, sk, dss) != 0) return fail("decaps768");
+    if (memcmp(ss, dss, sizeof ss) != 0) return fail("roundtrip768");
     printf("LOADTEST ok\n");
     return 0;
 }

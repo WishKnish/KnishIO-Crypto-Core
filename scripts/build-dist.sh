@@ -23,7 +23,8 @@ WASI_SHA256_x86_64_linux=b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aaf
 WASI_SHA256_arm64_macos=9c59398106b417f8f14913380fdf0097a8cc0ff4af9eb3ce0065a859e88d49e9
 ZIG_VERSION=0.16.0
 EXPORTS=(kcore_abi_version kcore_chains_hex kcore_mlkem1024_decaps kcore_mlkem1024_encaps
-         kcore_mlkem1024_keypair kcore_shake256 kcore_wots_address)
+         kcore_mlkem1024_keypair kcore_mlkem768_decaps kcore_mlkem768_encaps kcore_mlkem768_keypair
+         kcore_shake256 kcore_wots_address)
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 

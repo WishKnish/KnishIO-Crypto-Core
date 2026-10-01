@@ -1,6 +1,7 @@
 KCORE_1 {
   global: kcore_shake256; kcore_chains_hex; kcore_wots_address;
           kcore_mlkem1024_keypair; kcore_mlkem1024_encaps; kcore_mlkem1024_decaps;
+          kcore_mlkem768_keypair; kcore_mlkem768_encaps; kcore_mlkem768_decaps;
           kcore_abi_version;
   local: *;
 };

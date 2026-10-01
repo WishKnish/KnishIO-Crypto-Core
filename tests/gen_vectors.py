@@ -128,6 +128,9 @@ def main():
         address_cases.append({"id": "a%d" % i, "key": key, "expect": address(key)})
 
     mlkem_cases = [{"id": "k%d" % i, "seed": rand_hex(rng, 64), "coins": rand_hex(rng, 32)} for i in range(200)]
+    # Drawn after every earlier case, so adding them left the existing seeded cases unchanged.
+    mlkem_cases += [{"id": "k768_%d" % i, "set": 768, "seed": rand_hex(rng, 64), "coins": rand_hex(rng, 32)}
+                    for i in range(100)]
 
     canon_shake = []
     for i, t in enumerate(vectors["shake256"]["tests"]):
@@ -152,19 +155,24 @@ def main():
                              "counts": [8 - norm[k] for k in range(16)], "expect": t["expectedCompressedSignature"]})
         canon_chains.append({"id": "vwf%d" % i, "name": t["name"] + ".fragments", "chunks": t["privateKey"],
                              "counts": [8 + norm[k] for k in range(16)], "expect": t["expectedSignatureFragments"]})
-    # ML-KEM-1024 keygen KAT (vectors.mlkem1024.keygen), derived as sdks/KnishIO-Client-JS
-    # src/Wallet.js _deriveMlKemKeypair: seed = generateSecret(wallet.key, 128), i.e. SHAKE256 of the
-    # wallet key's text, 64 bytes (d || z); expect = the byte-frozen public key. Coins are fixed so
-    # the selftest's encaps/decaps round trip also runs on this key.
-    kg = vectors["mlkem1024"]["keygen"]
-    pk = base64.b64decode(kg["expectedPubkey"], validate=True)
-    if len(pk) != 1568:
-        print("FAIL mlkem1024.keygen: expectedPubkey is %d bytes, not 1568" % len(pk), file=sys.stderr)
-        return 2
-    kg_key = generate_key(kg["secret"], kg["token"], kg["position"])
-    canon_mlkem = [{"id": "vk0", "name": "mlkem1024." + kg["name"],
-                    "seed": shake_hex(kg_key.encode("utf-8"), 64),
-                    "coins": shake_hex(b"kcore.canonical.mlkem1024.coins", 32), "expect": pk.hex()}]
+    # ML-KEM keygen KATs (vectors.mlkem1024.keygen and vectors.mlkem768.keygen), derived as
+    # sdks/KnishIO-Client-JS src/Wallet.js _deriveMlKemKeypair: seed = generateSecret(wallet.key,
+    # 128), i.e. SHAKE256 of the wallet key's text, 64 bytes (d || z); expect = the byte-frozen
+    # public key. Coins are fixed so the selftest's encaps/decaps round trip also runs on each key.
+    canon_mlkem = []
+    for vid, (block_name, pk_len, extra) in enumerate((("mlkem1024", 1568, {}), ("mlkem768", 1184, {"set": 768}))):
+        kg = vectors[block_name]["keygen"]
+        pk = base64.b64decode(kg["expectedPubkey"], validate=True)
+        if len(pk) != pk_len:
+            print("FAIL %s.keygen: expectedPubkey is %d bytes, not %d" % (block_name, len(pk), pk_len), file=sys.stderr)
+            return 2
+        kg_key = generate_key(kg["secret"], kg["token"], kg["position"])
+        case = {"id": "vk%d" % vid, "name": block_name + "." + kg["name"]}
+        case.update(extra)
+        case.update({"seed": shake_hex(kg_key.encode("utf-8"), 64),
+                     "coins": shake_hex(("kcore.canonical.%s.coins" % block_name).encode("ascii"), 32),
+                     "expect": pk.hex()})
+        canon_mlkem.append(case)
 
     def block(name, cases, indent=""):
         body = ",\n".join(indent + json.dumps(c, separators=(",", ":")) for c in cases)

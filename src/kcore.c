@@ -25,10 +25,13 @@ void kcmlk_keccakf1600_permute(uint64_t *state);
 /* fips202.h:86-87 */
 void kcmlk_shake256(uint8_t *output, size_t outlen, const uint8_t *input, size_t inlen);
 
-/* mlkem_native.h:216-219, 282-286, 350-353 with the kcmlk1024 API namespace. */
+/* mlkem_native.h:216-219, 282-286, 350-353 with the kcmlk1024 / kcmlk768 API namespaces. */
 int kcmlk1024_keypair_derand(uint8_t pk[1568], uint8_t sk[3168], const uint8_t coins[64]);
 int kcmlk1024_enc_derand(uint8_t ct[1568], uint8_t ss[32], const uint8_t pk[1568], const uint8_t coins[32]);
 int kcmlk1024_dec(uint8_t ss[32], const uint8_t ct[1568], const uint8_t sk[3168]);
+int kcmlk768_keypair_derand(uint8_t pk[1184], uint8_t sk[2400], const uint8_t coins[64]);
+int kcmlk768_enc_derand(uint8_t ct[1088], uint8_t ss[32], const uint8_t pk[1184], const uint8_t coins[32]);
+int kcmlk768_dec(uint8_t ss[32], const uint8_t ct[1088], const uint8_t sk[2400]);
 
 #define KCORE_RATE 136u
 #define KCORE_CHUNK 128u
@@ -208,6 +211,34 @@ int kcore_mlkem1024_decaps(const uint8_t ct[1568], const uint8_t sk[3168], uint8
     uint8_t tss[KCORE_MLKEM_SS];
     if (ct == NULL || sk == NULL || ss == NULL) return -1;
     if (kcmlk1024_dec(tss, ct, sk) != 0) return -1;
+    memcpy(ss, tss, sizeof tss);
+    return 0;
+}
+
+int kcore_mlkem768_keypair(const uint8_t seed[64], uint8_t pk[1184], uint8_t sk[2400]) {
+    uint8_t tpk[KCORE_MLKEM768_PK];
+    uint8_t tsk[KCORE_MLKEM768_SK];
+    if (seed == NULL || pk == NULL || sk == NULL) return -1;
+    if (kcmlk768_keypair_derand(tpk, tsk, seed) != 0) return -1;
+    memcpy(pk, tpk, sizeof tpk);
+    memcpy(sk, tsk, sizeof tsk);
+    return 0;
+}
+
+int kcore_mlkem768_encaps(const uint8_t pk[1184], const uint8_t coins[32], uint8_t ct[1088], uint8_t ss[32]) {
+    uint8_t tct[KCORE_MLKEM768_CT];
+    uint8_t tss[KCORE_MLKEM_SS];
+    if (pk == NULL || coins == NULL || ct == NULL || ss == NULL) return -1;
+    if (kcmlk768_enc_derand(tct, tss, pk, coins) != 0) return -1;
+    memcpy(ct, tct, sizeof tct);
+    memcpy(ss, tss, sizeof tss);
+    return 0;
+}
+
+int kcore_mlkem768_decaps(const uint8_t ct[1088], const uint8_t sk[2400], uint8_t ss[32]) {
+    uint8_t tss[KCORE_MLKEM_SS];
+    if (ct == NULL || sk == NULL || ss == NULL) return -1;
+    if (kcmlk768_dec(tss, ct, sk) != 0) return -1;
     memcpy(ss, tss, sizeof tss);
     return 0;
 }

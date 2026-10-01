@@ -33,6 +33,9 @@ extern "C" {
 #define KCORE_MLKEM1024_PK 1568
 #define KCORE_MLKEM1024_SK 3168
 #define KCORE_MLKEM1024_CT 1568
+#define KCORE_MLKEM768_PK 1184
+#define KCORE_MLKEM768_SK 2400
+#define KCORE_MLKEM768_CT 1088
 #define KCORE_MLKEM_SS 32
 #define KCORE_MLKEM_SEED 64
 #define KCORE_MLKEM_COINS 32
@@ -55,6 +58,12 @@ KCORE_API int kcore_mlkem1024_keypair(const uint8_t seed[64], uint8_t pk[1568], 
 KCORE_API int kcore_mlkem1024_encaps(const uint8_t pk[1568], const uint8_t coins[32], uint8_t ct[1568],
                                      uint8_t ss[32]);
 KCORE_API int kcore_mlkem1024_decaps(const uint8_t ct[1568], const uint8_t sk[3168], uint8_t ss[32]);
+
+/* ML-KEM-768 (FIPS 203), the opt-in step-back parameter set. Same seed/coins contract as 1024. */
+KCORE_API int kcore_mlkem768_keypair(const uint8_t seed[64], uint8_t pk[1184], uint8_t sk[2400]);
+KCORE_API int kcore_mlkem768_encaps(const uint8_t pk[1184], const uint8_t coins[32], uint8_t ct[1088],
+                                    uint8_t ss[32]);
+KCORE_API int kcore_mlkem768_decaps(const uint8_t ct[1088], const uint8_t sk[2400], uint8_t ss[32]);
 
 #ifdef __cplusplus
 }

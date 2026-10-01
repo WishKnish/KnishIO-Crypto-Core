@@ -14,11 +14,12 @@ in the KnishIOClientSDK monorepo.
 
 ### Added
 
-- Seven-function C ABI (`kcore_abi_version`, `kcore_shake256`, `kcore_chains_hex`,
-  `kcore_wots_address`, `kcore_mlkem1024_keypair`, `kcore_mlkem1024_encaps`,
-  `kcore_mlkem1024_decaps`) on mlkem-native v1.2.0, with the `KCORE_1` ELF symbol version and
-  `KCORE_ABI_VERSION` 1 for bindings to check.
-- Shared libraries export only the seven API functions (ELF version script, Mach-O exported
+- Ten-function C ABI (`kcore_abi_version`, `kcore_shake256`, `kcore_chains_hex`,
+  `kcore_wots_address`, and `kcore_mlkem1024_*` / `kcore_mlkem768_*` `keypair`, `encaps`,
+  `decaps`) on mlkem-native v1.2.0, with the `KCORE_1` ELF symbol version and
+  `KCORE_ABI_VERSION` 1 for bindings to check. ML-KEM-1024 is the default set; ML-KEM-768 is the
+  opt-in step-back.
+- Shared libraries export only the ten API functions (ELF version script, Mach-O exported
   symbols list, PE `dllexport`); no mlkem-native symbol leaks. mlkem-native is built under the
   private `kcmlk` namespace, so the static library shares no defined symbol with the KnishIO
   C/C++ SDKs' own `mlkem`-prefixed build.
@@ -31,8 +32,8 @@ in the KnishIOClientSDK monorepo.
   linux-arm64-musl, darwin-universal, windows-x64, android-arm64-v8a (16 KiB pages) and
   wasm32 (WASI reactor).
 - Selftest over the cross-platform test vectors plus seeded differential cases, including the
-  byte-frozen cross-SDK ML-KEM-1024 keygen vector; a dlopen/LoadLibrary loader test; and a WASM
-  check.
+  byte-frozen cross-SDK ML-KEM-1024 and ML-KEM-768 keygen vectors; a dlopen/LoadLibrary loader
+  test; and a WASM check.
 - Release packages are gated on their DT_NEEDED set and, for Linux arm64 and Android, on the
   absence of SHA3 (ARMv8.4) Keccak code.
 - CI on real runners (Linux x64/arm64, macOS arm64/x86_64, Windows x64) and a tag-triggered

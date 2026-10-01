@@ -5,3 +5,6 @@ _kcore_mlkem1024_keypair
 _kcore_mlkem1024_encaps
 _kcore_mlkem1024_decaps
 _kcore_abi_version
+_kcore_mlkem768_keypair
+_kcore_mlkem768_encaps
+_kcore_mlkem768_decaps

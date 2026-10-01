@@ -6,7 +6,7 @@
 # Knish.IO Crypto Core (kcore)
 
 kcore is one small C library that implements the KnishIO hot cryptographic paths for every SDK
-through FFI: SHAKE256, WOTS+ chain walking, the WOTS+ address, and ML-KEM-1024 (FIPS 203) on
+through FFI: SHAKE256, WOTS+ chain walking, the WOTS+ address, and ML-KEM-1024 and ML-KEM-768 (FIPS 203) on
 [mlkem-native](https://github.com/pq-code-package/mlkem-native) v1.2.0, vendored as the submodule
 `external/mlkem-native`.
 
@@ -24,6 +24,12 @@ invalid arguments; on `-1` no output buffer is touched.
 | `kcore_mlkem1024_keypair(seed[64], pk[1568], sk[3168])` | Deterministic ML-KEM-1024 key generation. |
 | `kcore_mlkem1024_encaps(pk, coins[32], ct[1568], ss[32])` | Deterministic encapsulation. |
 | `kcore_mlkem1024_decaps(ct, sk, ss[32])` | Decapsulation (implicit rejection per FIPS 203). |
+| `kcore_mlkem768_keypair(seed[64], pk[1184], sk[2400])` | Deterministic ML-KEM-768 key generation (the opt-in step-back set). |
+| `kcore_mlkem768_encaps(pk, coins[32], ct[1088], ss[32])` | Deterministic encapsulation. |
+| `kcore_mlkem768_decaps(ct, sk, ss[32])` | Decapsulation (implicit rejection per FIPS 203). |
+
+`coins` must be fresh random bytes on every encapsulation (e.g. `os.urandom(32)`); repeating them
+against the same public key repeats the ciphertext and the shared secret.
 
 ## Build and test
 
@@ -62,13 +68,13 @@ target can run tests, a test bundle (`kcore-tests-<version>-<target>.tar.gz`) th
 | `darwin-universal` | Xcode clang, `arm64;x86_64` | macOS 11.0; arm64 uses the SHA3 Keccak backend, x86_64 runtime AVX2 |
 | `windows-x64` | zig 0.16.0 `x86_64-windows-gnu` | baseline x86-64, runtime AVX2; imports KERNEL32 + the UCRT (`api-ms-win-crt-*`, in Windows 10+); `kcore.dll` + `kcore.dll.a` |
 | `android-arm64-v8a` | NDK r27d, `android-31`, `-march=armv8-a+crc+crypto` | API 31, 16 KiB page-aligned `LOAD` segments, unversioned `libkcore.so` |
-| `wasm32` | wasi-sdk-34, `wasm32-wasip1` reactor | WASI preview 1; exports the seven functions plus `malloc`/`free` |
+| `wasm32` | wasi-sdk-34, `wasm32-wasip1` reactor | WASI preview 1; exports the ten functions plus `malloc`/`free` |
 
 The NDK and wasi-sdk downloads are pinned by sha256 in `scripts/build-dist.sh`.
 
 ## Exports and dispatch
 
-- Shared libraries export exactly the seven API functions: `src/kcore.map` (ELF, symbol version
+- Shared libraries export exactly the ten API functions: `src/kcore.map` (ELF, symbol version
   `KCORE_1`), `src/kcore.exp` (Mach-O), `dllexport` (PE). `scripts/check-exports.sh` requires the
   export set to equal `scripts/exports.txt`.
 - mlkem-native is compiled under the kcore-private namespace `kcmlk` (`kcmlk_*`, `kcmlk768_*`,
@@ -81,9 +87,9 @@ The NDK and wasi-sdk downloads are pinned by sha256 in `scripts/build-dist.sh`.
   x86_64 slice only. The SHA3 capability keeps upstream's compile-time meaning: available
   whenever `__ARM_FEATURE_SHA3` is compiled in.
 - `kcore_selftest_noavx2` (x86_64 only) forces the portable fallback, so both paths are tested on
-  AVX2 hardware. The selftest pins ML-KEM-1024 output bytes with the fixture's `mlkem1024.keygen`
-  vector (the public key every KnishIO SDK derives from the same seed), so each backend is checked
-  against the other SDKs, not only against itself.
+  AVX2 hardware. The selftest pins ML-KEM output bytes with the fixture's `mlkem1024.keygen` and
+  `mlkem768.keygen` vectors (the public keys every KnishIO SDK derives from the same seed), so each
+  backend is checked against the other SDKs, not only against itself.
 - CI also checks what each package links against (`scripts/check-needed.sh`) and, because the arm64
   CI runners have SHA3 in hardware, that the Linux arm64 and Android archives contain the scalar
   Keccak backend and no SHA3 (`v84a`) code (`scripts/check-arm64-baseline.sh`).

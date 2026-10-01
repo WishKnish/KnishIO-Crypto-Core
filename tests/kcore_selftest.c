@@ -2,10 +2,11 @@
  * kcore_selftest <differential.json>
  *
  * Runs every case of <build>/vectors/differential.json (written by tests/gen_vectors.py, one case per
- * line) through kcore_* and compares with the case's `expect`. Chains run at ways 1 and 4. Every
- * ML-KEM case checks determinism, that sk embeds pk (FIPS 203 dk = dk_pke || ek || H(ek) || z) and
- * that decaps(encaps) returns the shared secret; the canonical case (the fixture's
- * mlkem1024.keygen) also pins the public key bytes every SDK derives from the same seed. Finally the
+ * line) through kcore_* and compares with the case's `expect`. Chains run at ways 1 and 4. ML-KEM
+ * cases run ML-KEM-1024, or ML-KEM-768 when they carry "set":768. Every ML-KEM case checks
+ * determinism, that sk embeds pk (FIPS 203 dk = dk_pke || ek || H(ek) || z) and that
+ * decaps(encaps) returns the shared secret; the canonical cases (the fixture's mlkem1024.keygen and
+ * mlkem768.keygen) also pin the public key bytes every SDK derives from the same seed. Finally the
  * invalid-argument contract: -1 and untouched outputs. Prints "SELFTEST ok <n>" or
  * "SELFTEST FAIL <case id>".
  */
@@ -18,6 +19,40 @@
 static int fail(const char *id, size_t idlen) {
     printf("SELFTEST FAIL %.*s\n", (int)idlen, id);
     return 1;
+}
+
+/* One ML-KEM parameter set; pk_offset is where ek starts inside dk (384 * k). */
+struct mlkem_set {
+    int (*keypair)(const uint8_t *seed, uint8_t *pk, uint8_t *sk);
+    int (*encaps)(const uint8_t *pk, const uint8_t *coins, uint8_t *ct, uint8_t *ss);
+    int (*decaps)(const uint8_t *ct, const uint8_t *sk, uint8_t *ss);
+    size_t pk, sk, ct, pk_offset;
+};
+static const struct mlkem_set MLKEM1024 = {kcore_mlkem1024_keypair, kcore_mlkem1024_encaps, kcore_mlkem1024_decaps,
+                                           KCORE_MLKEM1024_PK, KCORE_MLKEM1024_SK, KCORE_MLKEM1024_CT, 1536};
+static const struct mlkem_set MLKEM768 = {kcore_mlkem768_keypair, kcore_mlkem768_encaps, kcore_mlkem768_decaps,
+                                          KCORE_MLKEM768_PK, KCORE_MLKEM768_SK, KCORE_MLKEM768_CT, 1152};
+
+/* Returns 0 when the set is deterministic, sk embeds pk, the optional expected pk hex matches, and
+ * decaps(encaps) recovers the shared secret. hex needs room for 2 * m->pk characters. */
+static int check_mlkem(const struct mlkem_set *m, const uint8_t seed[64], const uint8_t coins[32],
+                       const char *expect, size_t elen, char *hex) {
+    uint8_t pk[KCORE_MLKEM1024_PK], sk[KCORE_MLKEM1024_SK], pk2[KCORE_MLKEM1024_PK], sk2[KCORE_MLKEM1024_SK];
+    uint8_t ct[KCORE_MLKEM1024_CT], ct2[KCORE_MLKEM1024_CT];
+    uint8_t ss[KCORE_MLKEM_SS], ss2[KCORE_MLKEM_SS], dss[KCORE_MLKEM_SS];
+    if (m->keypair(seed, pk, sk) != 0 || m->keypair(seed, pk2, sk2) != 0) return 1;
+    if (memcmp(pk, pk2, m->pk) != 0 || memcmp(sk, sk2, m->sk) != 0) return 1;
+    if (memcmp(sk + m->pk_offset, pk, m->pk) != 0) return 1;
+    /* Canonical cases carry the byte-frozen public key (cross-SDK KAT). */
+    if (expect != NULL) {
+        if (elen != 2 * m->pk) return 1;
+        vr_tohex(pk, m->pk, hex);
+        if (memcmp(hex, expect, elen) != 0) return 1;
+    }
+    if (m->encaps(pk, coins, ct, ss) != 0 || m->encaps(pk, coins, ct2, ss2) != 0) return 1;
+    if (memcmp(ct, ct2, m->ct) != 0 || memcmp(ss, ss2, sizeof ss) != 0) return 1;
+    if (m->decaps(ct, sk, dss) != 0 || memcmp(dss, ss, sizeof ss) != 0) return 1;
+    return 0;
 }
 
 static int check_contract(void) {
@@ -100,24 +135,18 @@ int main(int argc, char **argv) {
             memcpy(work, v, 2048);
             if (kcore_wots_address(work, addr) != 0 || memcmp(addr, expect, 64) != 0) return fail(id, idlen);
         } else if ((v = vr_field(line, "seed", &len)) != NULL) {
-            uint8_t seed[64], coins[32], pk[1568], sk[3168], pk2[1568], sk2[3168], ct[1568], ct2[1568];
-            uint8_t ss[32], ss2[32], dss[32];
-            size_t clen = 0;
+            uint8_t seed[64], coins[32];
+            size_t clen = 0, slen = 0;
+            const struct mlkem_set *m = &MLKEM1024;
             if (len != 128 || vr_unhex(v, len, seed) != 0) return fail(id, idlen);
             const char *c = vr_field(line, "coins", &clen);
             if (c == NULL || clen != 64 || vr_unhex(c, clen, coins) != 0) return fail(id, idlen);
-            if (kcore_mlkem1024_keypair(seed, pk, sk) != 0 || kcore_mlkem1024_keypair(seed, pk2, sk2) != 0) return fail(id, idlen);
-            if (memcmp(pk, pk2, sizeof pk) != 0 || memcmp(sk, sk2, sizeof sk) != 0) return fail(id, idlen);
-            if (memcmp(sk + 1536, pk, sizeof pk) != 0) return fail(id, idlen);
-            /* Canonical cases carry the byte-frozen public key (cross-SDK KAT). */
-            if (expect != NULL) {
-                if (elen != 2 * sizeof pk) return fail(id, idlen);
-                vr_tohex(pk, sizeof pk, hex);
-                if (memcmp(hex, expect, elen) != 0) return fail(id, idlen);
+            const char *set = vr_field(line, "set", &slen);
+            if (set != NULL) {
+                if (slen != 3 || memcmp(set, "768", 3) != 0) return fail(id, idlen);
+                m = &MLKEM768;
             }
-            if (kcore_mlkem1024_encaps(pk, coins, ct, ss) != 0 || kcore_mlkem1024_encaps(pk, coins, ct2, ss2) != 0) return fail(id, idlen);
-            if (memcmp(ct, ct2, sizeof ct) != 0 || memcmp(ss, ss2, sizeof ss) != 0) return fail(id, idlen);
-            if (kcore_mlkem1024_decaps(ct, sk, dss) != 0 || memcmp(dss, ss, sizeof ss) != 0) return fail(id, idlen);
+            if (check_mlkem(m, seed, coins, expect, elen, hex) != 0) return fail(id, idlen);
         } else if ((v = vr_field(line, "outlen", &len)) != NULL) {
             long outlen = strtol(v, NULL, 10);
             const char *data = vr_field(line, "in", &len);
