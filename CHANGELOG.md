@@ -10,7 +10,7 @@ per-target packages and the source tarball.
 Conventions for tags, commits, and these entries: `docs/SDK-RELEASE-CONVENTIONS.md`
 in the KnishIOClientSDK monorepo.
 
-## [Unreleased]
+## [0.1.0] — 2026-09-30
 
 ### Added
 
@@ -39,4 +39,5 @@ in the KnishIOClientSDK monorepo.
 - CI on real runners (Linux x64/arm64, macOS arm64/x86_64, Windows x64) and a tag-triggered
   GitHub Release workflow.
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Crypto-Core/commits/main
+[Unreleased]: https://github.com/WishKnish/KnishIO-Crypto-Core/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/WishKnish/KnishIO-Crypto-Core/releases/tag/0.1.0
