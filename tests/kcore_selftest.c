@@ -77,6 +77,14 @@ static int check_contract(void) {
     if (kcore_shake256(NULL, 1, out, 4) != -1) return 1;
     if (out[0] != 1 || out[3] != 4) return 1;
     if (kcore_shake256(NULL, 0, out, 4) != 0) return 1; /* empty input is valid */
+    /* A 2048-hex key is not a 64-chain key: kcore_wots_address_v2 refuses it and leaves the output. */
+    char key[8 * 1024 + 1];
+    char addr[64];
+    memset(key, 'a', sizeof key);
+    key[2048] = 0;
+    memset(addr, 'z', sizeof addr);
+    if (kcore_wots_address_v2(key, addr) != -1 || addr[0] != 'z' || addr[63] != 'z') return 1;
+    if (kcore_wots_address_v2(NULL, addr) != -1 || kcore_wots_address_v2(key, NULL) != -1) return 1;
     return 0;
 }
 
@@ -131,9 +139,10 @@ int main(int argc, char **argv) {
             }
         } else if ((v = vr_field(line, "key", &len)) != NULL) {
             char addr[64];
-            if (len != 2048 || expect == NULL || elen != 64) return fail(id, idlen);
-            memcpy(work, v, 2048);
-            if (kcore_wots_address(work, addr) != 0 || memcmp(addr, expect, 64) != 0) return fail(id, idlen);
+            if ((len != 2048 && len != 8192) || expect == NULL || elen != 64) return fail(id, idlen);
+            memcpy(work, v, len);
+            int rc = len == 2048 ? kcore_wots_address(work, addr) : kcore_wots_address_v2(work, addr);
+            if (rc != 0 || memcmp(addr, expect, 64) != 0) return fail(id, idlen);
         } else if ((v = vr_field(line, "seed", &len)) != NULL) {
             uint8_t seed[64], coins[32];
             size_t clen = 0, slen = 0;

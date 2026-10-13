@@ -33,7 +33,8 @@ def chains(chunks: str, counts):
 
 
 def address(key: str) -> str:
-    walked = chains(key, [16] * 16)
+    """WOTS+ address of a 16-chain (2048-hex) or 64-chain (8192-hex) key."""
+    walked = chains(key, [16] * (len(key) // 128))
     digest = shake_hex(walked.encode("ascii"), 1024)
     return shake_hex(digest.encode("ascii"), 32)
 
@@ -131,6 +132,10 @@ def main():
     # Drawn after every earlier case, so adding them left the existing seeded cases unchanged.
     mlkem_cases += [{"id": "k768_%d" % i, "set": 768, "seed": rand_hex(rng, 64), "coins": rand_hex(rng, 32)}
                     for i in range(100)]
+    # 64-chain (8192-hex) keys for kcore_wots_address_v2, drawn last for the same reason.
+    for i in range(20):
+        key = rand_hex(rng, 4096)
+        address_cases.append({"id": "a2_%d" % i, "key": key, "expect": address(key)})
 
     canon_shake = []
     for i, t in enumerate(vectors["shake256"]["tests"]):

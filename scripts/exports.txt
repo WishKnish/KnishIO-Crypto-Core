@@ -8,3 +8,4 @@ kcore_mlkem768_encaps
 kcore_mlkem768_keypair
 kcore_shake256
 kcore_wots_address
+kcore_wots_address_v2

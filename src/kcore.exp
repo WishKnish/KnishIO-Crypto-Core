@@ -8,3 +8,4 @@ _kcore_abi_version
 _kcore_mlkem768_keypair
 _kcore_mlkem768_encaps
 _kcore_mlkem768_decaps
+_kcore_wots_address_v2

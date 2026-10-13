@@ -10,6 +10,13 @@ per-target packages and the source tarball.
 Conventions for tags, commits, and these entries: `docs/SDK-RELEASE-CONVENTIONS.md`
 in the KnishIOClientSDK monorepo.
 
+## [Unreleased]
+
+### Added
+
+- `kcore_wots_address_v2`: the WOTS+ address of a 64-chain (8192-hex) key. ABI version unchanged
+  (1); the new symbol is in the `KCORE_1.1` ELF version node, which inherits `KCORE_1`.
+
 ## [0.1.0] — 2026-09-30
 
 ### Added

@@ -1,5 +1,5 @@
 /*
- * kcore: the KnishIO shared crypto core (SHAKE256, WOTS+ chains, WOTS+ address, ML-KEM-1024).
+ * kcore: the KnishIO shared crypto core (SHAKE256, WOTS+ chains, WOTS+ address (16 and 64 chains), ML-KEM-1024).
  * Every function returns 0 on success and -1 on invalid arguments; on -1 no output is touched.
  */
 #ifndef KCORE_H
@@ -53,6 +53,9 @@ KCORE_API int kcore_chains_hex(char *chunks, const int *counts, size_t n, int wa
 
 /* WOTS+ address of a 2048-hex key; writes 64 hex characters, no NUL. */
 KCORE_API int kcore_wots_address(const char *key_hex2048, char *address_hex64);
+
+/* WOTS+ address of an 8192-hex (64-chain) key; writes 64 hex characters, no NUL. */
+KCORE_API int kcore_wots_address_v2(const char *key_hex8192, char *address_hex64);
 
 KCORE_API int kcore_mlkem1024_keypair(const uint8_t seed[64], uint8_t pk[1568], uint8_t sk[3168]);
 KCORE_API int kcore_mlkem1024_encaps(const uint8_t pk[1568], const uint8_t coins[32], uint8_t ct[1568],

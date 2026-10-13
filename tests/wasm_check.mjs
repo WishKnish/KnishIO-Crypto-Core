@@ -1,7 +1,7 @@
 // wasm_check.mjs <kcore.wasm> [<differential.json>]
 //
 // Instantiates the wasm32-wasip1 reactor the way a JS binding does and checks: the export set (the
-// ten kcore_* functions plus malloc/free), kcore_abi_version() == 1, SHAKE256("") -> 32 bytes
+// eleven kcore_* functions plus malloc/free), kcore_abi_version() == 1, SHAKE256("") -> 32 bytes
 // against the canonical vector, and ML-KEM-1024 and ML-KEM-768 keypair/encaps/decaps round trips.
 // With the selftest vectors (tests/gen_vectors.py output) it also runs every canonical.mlkem case:
 // the public key from the case's seed must equal the byte-frozen cross-SDK key.
@@ -12,7 +12,7 @@ import { WASI } from 'node:wasi'
 const NAMES = [
   'kcore_abi_version', 'kcore_chains_hex', 'kcore_mlkem1024_decaps', 'kcore_mlkem1024_encaps',
   'kcore_mlkem1024_keypair', 'kcore_mlkem768_decaps', 'kcore_mlkem768_encaps', 'kcore_mlkem768_keypair',
-  'kcore_shake256', 'kcore_wots_address', 'malloc', 'free'
+  'kcore_shake256', 'kcore_wots_address', 'kcore_wots_address_v2', 'malloc', 'free'
 ]
 // Entry points and public-key length per parameter set; a canonical case without "set" is ML-KEM-1024.
 const SETS = {

@@ -21,6 +21,7 @@ invalid arguments; on `-1` no output buffer is touched.
 | `kcore_shake256(in, inlen, out, outlen)` | SHAKE256(`in`) → `outlen` bytes, `outlen` 1..1048576. `in` may be `NULL` when `inlen` is 0. |
 | `kcore_chains_hex(chunks, counts, n, ways)` | Advances `n` (1..64) WOTS+ chains in place. `chunks` holds `n`×128 hex characters (no NUL); chunk *i* becomes hex(SHAKE256(chunk, 64 bytes)) applied `counts[i]` (0..64) times. `ways` is 1 (scalar) or 4 (four-lane Keccak). |
 | `kcore_wots_address(key_hex2048, address_hex64)` | WOTS+ address of a 2048-hex key: 64 hex characters, no NUL. |
+| `kcore_wots_address_v2(key_hex8192, address_hex64)` | WOTS+ address of an 8192-hex (64-chain) key: 64 hex characters, no NUL. Since 0.2.0. |
 | `kcore_mlkem1024_keypair(seed[64], pk[1568], sk[3168])` | Deterministic ML-KEM-1024 key generation. |
 | `kcore_mlkem1024_encaps(pk, coins[32], ct[1568], ss[32])` | Deterministic encapsulation. |
 | `kcore_mlkem1024_decaps(ct, sk, ss[32])` | Decapsulation (implicit rejection per FIPS 203). |
@@ -68,15 +69,15 @@ target can run tests, a test bundle (`kcore-tests-<version>-<target>.tar.gz`) th
 | `darwin-universal` | Xcode clang, `arm64;x86_64` | macOS 11.0; arm64 uses the SHA3 Keccak backend, x86_64 runtime AVX2 |
 | `windows-x64` | zig 0.16.0 `x86_64-windows-gnu` | baseline x86-64, runtime AVX2; imports KERNEL32 + the UCRT (`api-ms-win-crt-*`, in Windows 10+); `kcore.dll` + `kcore.dll.a` |
 | `android-arm64-v8a` | NDK r27d, `android-31`, `-march=armv8-a+crc+crypto` | API 31, 16 KiB page-aligned `LOAD` segments, unversioned `libkcore.so` |
-| `wasm32` | wasi-sdk-34, `wasm32-wasip1` reactor | WASI preview 1; exports the ten functions plus `malloc`/`free` |
+| `wasm32` | wasi-sdk-34, `wasm32-wasip1` reactor | WASI preview 1; exports the eleven functions plus `malloc`/`free` |
 
 The NDK and wasi-sdk downloads are pinned by sha256 in `scripts/build-dist.sh`.
 
 ## Exports and dispatch
 
-- Shared libraries export exactly the ten API functions: `src/kcore.map` (ELF, symbol version
-  `KCORE_1`), `src/kcore.exp` (Mach-O), `dllexport` (PE). `scripts/check-exports.sh` requires the
-  export set to equal `scripts/exports.txt`.
+- Shared libraries export exactly the eleven API functions: `src/kcore.map` (ELF, symbol versions
+  `KCORE_1` and, for `kcore_wots_address_v2`, `KCORE_1.1`), `src/kcore.exp` (Mach-O), `dllexport`
+  (PE). `scripts/check-exports.sh` requires the export set to equal `scripts/exports.txt`.
 - mlkem-native is compiled under the kcore-private namespace `kcmlk` (`kcmlk_*`, `kcmlk768_*`,
   `kcmlk1024_*`), not upstream's `mlkem` that the KnishIO C and C++ SDKs use, so `libkcore.a`
   defines no symbol that either SDK's static library defines (with `mlkem` they shared 84).

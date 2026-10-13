@@ -1,5 +1,5 @@
 /*
- * kcore: SHAKE256, WOTS+ chains, WOTS+ address and ML-KEM-1024 on mlkem-native v1.2.0.
+ * kcore: SHAKE256, WOTS+ chains, WOTS+ address (16 and 64 chains) and ML-KEM-1024 on mlkem-native v1.2.0.
  *
  * Every kcmlk* symbol below is compiled by mlkem_multilevel.c under the `kcmlk` namespace; with
  * MLK_CONFIG_USE_NATIVE_BACKEND_FIPS202 the permutations use mlkem-native's native backend (on a
@@ -168,23 +168,34 @@ int kcore_chains_hex(char *chunks, const int *counts, size_t n, int ways) {
     return 0;
 }
 
-int kcore_wots_address(const char *key_hex2048, char *address_hex64) {
-    char work[16 * KCORE_CHUNK];
-    int counts[16];
+/* hex(SHAKE256(hex(SHAKE256(pk_0 ‖ … ‖ pk_{n-1}, 1024 bytes)), 32 bytes)) with pk_i = H^16(sk_i). */
+static int wots_address(const char *key_hex, size_t chains, char *work, char *address_hex64) {
+    int counts[KCORE_MAX_CHAINS];
     uint8_t digest[1024];
     char digest_hex[2048];
     uint8_t address[32];
+    size_t key_len = chains * KCORE_CHUNK;
 
-    if (key_hex2048 == NULL || address_hex64 == NULL) return -1;
-    if (memchr(key_hex2048, '\0', sizeof work) != NULL) return -1;
-    memcpy(work, key_hex2048, sizeof work);
-    for (int i = 0; i < 16; i++) counts[i] = 16;
-    if (kcore_chains_hex(work, counts, 16, 4) != 0) return -1;
-    kcmlk_shake256(digest, sizeof digest, (const uint8_t *)work, sizeof work);
+    if (key_hex == NULL || address_hex64 == NULL) return -1;
+    if (memchr(key_hex, '\0', key_len) != NULL) return -1;
+    memcpy(work, key_hex, key_len);
+    for (size_t i = 0; i < chains; i++) counts[i] = 16;
+    if (kcore_chains_hex(work, counts, chains, 4) != 0) return -1;
+    kcmlk_shake256(digest, sizeof digest, (const uint8_t *)work, key_len);
     hex_encode(digest, sizeof digest, digest_hex);
     kcmlk_shake256(address, sizeof address, (const uint8_t *)digest_hex, sizeof digest_hex);
     hex_encode(address, sizeof address, address_hex64);
     return 0;
+}
+
+int kcore_wots_address(const char *key_hex2048, char *address_hex64) {
+    char work[16 * KCORE_CHUNK];
+    return wots_address(key_hex2048, 16, work, address_hex64);
+}
+
+int kcore_wots_address_v2(const char *key_hex8192, char *address_hex64) {
+    char work[64 * KCORE_CHUNK];
+    return wots_address(key_hex8192, 64, work, address_hex64);
 }
 
 int kcore_mlkem1024_keypair(const uint8_t seed[64], uint8_t pk[1568], uint8_t sk[3168]) {

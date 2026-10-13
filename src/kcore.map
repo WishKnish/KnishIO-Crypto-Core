@@ -5,3 +5,7 @@ KCORE_1 {
           kcore_abi_version;
   local: *;
 };
+
+KCORE_1.1 {
+  global: kcore_wots_address_v2;
+} KCORE_1;

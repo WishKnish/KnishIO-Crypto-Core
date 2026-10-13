@@ -2,9 +2,10 @@
  * kcore_loadtest <shared-library-path>
  *
  * Loads libkcore dynamically the way every FFI binding does (dlopen / LoadLibraryA), resolves the
- * ten exported kcore_* symbols, requires kcore_abi_version() == 1 and runs known answers:
- * SHAKE256("") -> 32 bytes (canonical vector empty_string_32_bytes) and ML-KEM-1024 and ML-KEM-768
- * keypair/encaps/decaps round trips. Prints "LOADTEST ok" or "LOADTEST FAIL <step>".
+ * eleven exported kcore_* symbols, requires kcore_abi_version() == 1 and runs known answers:
+ * SHAKE256("") -> 32 bytes (canonical vector empty_string_32_bytes), ML-KEM-1024 and ML-KEM-768
+ * keypair/encaps/decaps round trips, and the 16- and 64-chain WOTS+ addresses of one key.
+ * Prints "LOADTEST ok" or "LOADTEST FAIL <step>".
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -27,6 +28,7 @@ typedef int (*shake_fn)(const uint8_t *, size_t, uint8_t *, size_t);
 typedef int (*keypair_fn)(const uint8_t *, uint8_t *, uint8_t *);
 typedef int (*encaps_fn)(const uint8_t *, const uint8_t *, uint8_t *, uint8_t *);
 typedef int (*decaps_fn)(const uint8_t *, const uint8_t *, uint8_t *);
+typedef int (*address_fn)(const char *, char *);
 
 static int fail(const char *step) {
     printf("LOADTEST FAIL %s\n", step);
@@ -37,12 +39,12 @@ int main(int argc, char **argv) {
     static const char *names[] = {"kcore_shake256",          "kcore_chains_hex",       "kcore_wots_address",
                                   "kcore_mlkem1024_keypair", "kcore_mlkem1024_encaps", "kcore_mlkem1024_decaps",
                                   "kcore_abi_version",       "kcore_mlkem768_keypair", "kcore_mlkem768_encaps",
-                                  "kcore_mlkem768_decaps"};
+                                  "kcore_mlkem768_decaps",   "kcore_wots_address_v2"};
     enum { NSYM = sizeof names / sizeof names[0] };
     static const char expect[] = "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f";
     void *sym[NSYM];
     uint8_t out[32], seed[64] = {0}, coins[32] = {0}, pk[1568], sk[3168], ct[1568], ss[32], dss[32];
-    char hex[65];
+    char hex[65], key[64 * 128], addr1[64], addr2[64];
 
     if (argc != 2) {
         fprintf(stderr, "usage: kcore_loadtest <shared-library-path>\n");
@@ -67,6 +69,11 @@ int main(int argc, char **argv) {
     if (((encaps_fn)sym[8])(pk, coins, ct, ss) != 0) return fail("encaps768");
     if (((decaps_fn)sym[9])(ct, sk, dss) != 0) return fail("decaps768");
     if (memcmp(ss, dss, sizeof ss) != 0) return fail("roundtrip768");
+    /* The 64-chain address of a key differs from the 16-chain address of its first 2048 characters. */
+    memset(key, 'a', sizeof key);
+    if (((address_fn)sym[2])(key, addr1) != 0) return fail("address");
+    if (((address_fn)sym[10])(key, addr2) != 0) return fail("address_v2");
+    if (memcmp(addr1, addr2, sizeof addr1) == 0) return fail("address_v2-distinct");
     printf("LOADTEST ok\n");
     return 0;
 }
