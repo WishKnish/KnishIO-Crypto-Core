@@ -169,13 +169,13 @@ jobs:
             linux-arm64-*) sh scripts/check-arm64-baseline.sh "$P/lib/libkcore.a" ;;
           esac
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: pkg-${{ matrix.target }}
           path: dist/knishio-crypto-core-*-${{ matrix.target }}.tar.gz
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: tests-${{ matrix.target }}
           path: dist/kcore-tests-*-${{ matrix.target }}.tar.gz
@@ -211,13 +211,13 @@ jobs:
           echo "arm64 v84a symbols: $n"
           [ "$n" -gt 0 ] || echo "::warning::SHA3 backend not selected in the arm64 slice"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: pkg-darwin-universal
           path: dist/knishio-crypto-core-*-darwin-universal.tar.gz
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: tests-darwin-universal
           path: dist/kcore-tests-*-darwin-universal.tar.gz
@@ -259,7 +259,7 @@ jobs:
           done
           [ "$n" -gt 0 ] || { echo "::error::no LOAD segments"; exit 1; }
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: pkg-android-arm64-v8a
           path: dist/knishio-crypto-core-*-android-arm64-v8a.tar.gz
@@ -292,7 +292,7 @@ jobs:
           [ "$out" = "WASMCHECK ok" ]
           sh scripts/check-exports.sh "$W" wasm
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: pkg-wasm32
           path: dist/knishio-crypto-core-*-wasm32.tar.gz
@@ -325,12 +325,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: pkg-${{ matrix.target }}
           path: dist
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: tests-${{ matrix.target }}
           path: dist
