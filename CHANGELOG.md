@@ -10,6 +10,14 @@ per-target packages and the source tarball.
 Conventions for tags, commits, and these entries: `docs/SDK-RELEASE-CONVENTIONS.md`
 in the KnishIOClientSDK monorepo.
 
+## [Unreleased]
+
+### Added
+
+- CI generates a CycloneDX SBOM listing the mlkem-native submodule (checked against the gitlink), and OSV
+  scans its pinned commit on every push and weekly. Each GitHub Release attaches it as
+  `knishio-crypto-core-<version>.cdx.json`.
+
 ## [0.2.0] — 2026-10-13
 
 ### Added
