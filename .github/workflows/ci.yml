@@ -6,6 +6,9 @@ name: CI
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   # Catch version drift at commit time, not at release time. publish.yml refuses a tag that
   # disagrees with the declared version, but only on a tag push. Same script, no expected
