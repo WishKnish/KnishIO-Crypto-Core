@@ -18,6 +18,13 @@ in the KnishIOClientSDK monorepo.
   scans its pinned commit on every push and weekly. Each GitHub Release attaches it as
   `knishio-crypto-core-<version>.cdx.json`.
 
+### Security
+
+- ML-KEM secret keys and shared secrets, and the WOTS+ chain preimages and Keccak state used while
+  hashing them, are zeroed on the stack before every `kcore_*` call returns, including error returns
+  (previously they stayed on native thread stacks and in the WASM shadow stack). Outputs and the ABI
+  are unchanged.
+
 ## [0.2.0] — 2026-10-13
 
 ### Added

@@ -8,6 +8,9 @@
 #include "kcore.h"
 
 #include <string.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 /* keccakf1600.h:20-96 under MLK_NAMESPACE(x) == kcmlk_##x. The x4 state layout is
  * implementation-defined: it is only ever touched through the x4 xor/extract helpers. */
@@ -51,6 +54,18 @@ static void hex_encode(const uint8_t *data, size_t len, char *out) {
     }
 }
 
+/* Zeroes secret scratch (ML-KEM keys, shared secrets, WOTS+ chain preimages) before a stack frame is
+ * released, in a way the optimiser cannot drop as a dead store; same technique as mlkem-native's
+ * mlk_zeroize (verify.h). */
+static void kcore_wipe(void *p, size_t n) {
+#if defined(_WIN32)
+    SecureZeroMemory(p, n);
+#else
+    memset(p, 0, n);
+    __asm__ volatile("" : : "r"(p) : "memory");
+#endif
+}
+
 /* SHAKE256 padding of a 128-byte message at rate 136: 0x1F, zeros, 0x80 in the last byte. */
 static void load_block(unsigned char block[KCORE_RATE], const char *chunk) {
     memcpy(block, chunk, KCORE_CHUNK);
@@ -69,6 +84,9 @@ static void step_x1(char *chunk) {
     kcmlk_keccakf1600_permute(state);
     kcmlk_keccakf1600_extract_bytes(state, out, 0, KCORE_STEP_OUT);
     hex_encode(out, KCORE_STEP_OUT, chunk);
+    kcore_wipe(state, sizeof state);
+    kcore_wipe(block, sizeof block);
+    kcore_wipe(out, sizeof out);
 }
 
 int kcore_shake256(const uint8_t *in, size_t inlen, uint8_t *out, size_t outlen) {
@@ -149,6 +167,9 @@ static void chains_x4(char *chunks, const int *counts, size_t n) {
             }
         }
     }
+    kcore_wipe(state, sizeof state);
+    kcore_wipe(block, sizeof block);
+    kcore_wipe(out, sizeof out);
 }
 
 int kcore_chains_hex(char *chunks, const int *counts, size_t n, int ways) {
@@ -190,66 +211,94 @@ static int wots_address(const char *key_hex, size_t chains, char *work, char *ad
 
 int kcore_wots_address(const char *key_hex2048, char *address_hex64) {
     char work[16 * KCORE_CHUNK];
-    return wots_address(key_hex2048, 16, work, address_hex64);
+    int rc = wots_address(key_hex2048, 16, work, address_hex64);
+    kcore_wipe(work, sizeof work);
+    return rc;
 }
 
 int kcore_wots_address_v2(const char *key_hex8192, char *address_hex64) {
     char work[64 * KCORE_CHUNK];
-    return wots_address(key_hex8192, 64, work, address_hex64);
+    int rc = wots_address(key_hex8192, 64, work, address_hex64);
+    kcore_wipe(work, sizeof work);
+    return rc;
 }
 
 int kcore_mlkem1024_keypair(const uint8_t seed[64], uint8_t pk[1568], uint8_t sk[3168]) {
     uint8_t tpk[KCORE_MLKEM1024_PK];
     uint8_t tsk[KCORE_MLKEM1024_SK];
+    int rc = -1;
     if (seed == NULL || pk == NULL || sk == NULL) return -1;
-    if (kcmlk1024_keypair_derand(tpk, tsk, seed) != 0) return -1;
-    memcpy(pk, tpk, sizeof tpk);
-    memcpy(sk, tsk, sizeof tsk);
-    return 0;
+    if (kcmlk1024_keypair_derand(tpk, tsk, seed) == 0) {
+        memcpy(pk, tpk, sizeof tpk);
+        memcpy(sk, tsk, sizeof tsk);
+        rc = 0;
+    }
+    kcore_wipe(tsk, sizeof tsk);
+    return rc;
 }
 
 int kcore_mlkem1024_encaps(const uint8_t pk[1568], const uint8_t coins[32], uint8_t ct[1568], uint8_t ss[32]) {
     uint8_t tct[KCORE_MLKEM1024_CT];
     uint8_t tss[KCORE_MLKEM_SS];
+    int rc = -1;
     if (pk == NULL || coins == NULL || ct == NULL || ss == NULL) return -1;
-    if (kcmlk1024_enc_derand(tct, tss, pk, coins) != 0) return -1;
-    memcpy(ct, tct, sizeof tct);
-    memcpy(ss, tss, sizeof tss);
-    return 0;
+    if (kcmlk1024_enc_derand(tct, tss, pk, coins) == 0) {
+        memcpy(ct, tct, sizeof tct);
+        memcpy(ss, tss, sizeof tss);
+        rc = 0;
+    }
+    kcore_wipe(tss, sizeof tss);
+    return rc;
 }
 
 int kcore_mlkem1024_decaps(const uint8_t ct[1568], const uint8_t sk[3168], uint8_t ss[32]) {
     uint8_t tss[KCORE_MLKEM_SS];
+    int rc = -1;
     if (ct == NULL || sk == NULL || ss == NULL) return -1;
-    if (kcmlk1024_dec(tss, ct, sk) != 0) return -1;
-    memcpy(ss, tss, sizeof tss);
-    return 0;
+    if (kcmlk1024_dec(tss, ct, sk) == 0) {
+        memcpy(ss, tss, sizeof tss);
+        rc = 0;
+    }
+    kcore_wipe(tss, sizeof tss);
+    return rc;
 }
 
 int kcore_mlkem768_keypair(const uint8_t seed[64], uint8_t pk[1184], uint8_t sk[2400]) {
     uint8_t tpk[KCORE_MLKEM768_PK];
     uint8_t tsk[KCORE_MLKEM768_SK];
+    int rc = -1;
     if (seed == NULL || pk == NULL || sk == NULL) return -1;
-    if (kcmlk768_keypair_derand(tpk, tsk, seed) != 0) return -1;
-    memcpy(pk, tpk, sizeof tpk);
-    memcpy(sk, tsk, sizeof tsk);
-    return 0;
+    if (kcmlk768_keypair_derand(tpk, tsk, seed) == 0) {
+        memcpy(pk, tpk, sizeof tpk);
+        memcpy(sk, tsk, sizeof tsk);
+        rc = 0;
+    }
+    kcore_wipe(tsk, sizeof tsk);
+    return rc;
 }
 
 int kcore_mlkem768_encaps(const uint8_t pk[1184], const uint8_t coins[32], uint8_t ct[1088], uint8_t ss[32]) {
     uint8_t tct[KCORE_MLKEM768_CT];
     uint8_t tss[KCORE_MLKEM_SS];
+    int rc = -1;
     if (pk == NULL || coins == NULL || ct == NULL || ss == NULL) return -1;
-    if (kcmlk768_enc_derand(tct, tss, pk, coins) != 0) return -1;
-    memcpy(ct, tct, sizeof tct);
-    memcpy(ss, tss, sizeof tss);
-    return 0;
+    if (kcmlk768_enc_derand(tct, tss, pk, coins) == 0) {
+        memcpy(ct, tct, sizeof tct);
+        memcpy(ss, tss, sizeof tss);
+        rc = 0;
+    }
+    kcore_wipe(tss, sizeof tss);
+    return rc;
 }
 
 int kcore_mlkem768_decaps(const uint8_t ct[1088], const uint8_t sk[2400], uint8_t ss[32]) {
     uint8_t tss[KCORE_MLKEM_SS];
+    int rc = -1;
     if (ct == NULL || sk == NULL || ss == NULL) return -1;
-    if (kcmlk768_dec(tss, ct, sk) != 0) return -1;
-    memcpy(ss, tss, sizeof tss);
-    return 0;
+    if (kcmlk768_dec(tss, ct, sk) == 0) {
+        memcpy(ss, tss, sizeof tss);
+        rc = 0;
+    }
+    kcore_wipe(tss, sizeof tss);
+    return rc;
 }
