@@ -12,6 +12,8 @@ in the KnishIOClientSDK monorepo.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-11-12
+
 ### Added
 
 - CI generates a CycloneDX SBOM listing the mlkem-native submodule (checked against the gitlink), and OSV
@@ -61,6 +63,7 @@ in the KnishIOClientSDK monorepo.
 - CI on real runners (Linux x64/arm64, macOS arm64/x86_64, Windows x64) and a tag-triggered
   GitHub Release workflow.
 
-[Unreleased]: https://github.com/WishKnish/KnishIO-Crypto-Core/compare/0.2.0...HEAD
+[Unreleased]: https://github.com/WishKnish/KnishIO-Crypto-Core/compare/0.2.1...HEAD
+[0.2.1]: https://github.com/WishKnish/KnishIO-Crypto-Core/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/WishKnish/KnishIO-Crypto-Core/compare/0.1.0...0.2.0
 [0.1.0]: https://github.com/WishKnish/KnishIO-Crypto-Core/releases/tag/0.1.0

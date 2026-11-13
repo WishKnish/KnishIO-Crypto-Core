@@ -14,8 +14,8 @@ extern "C" {
 
 #define KCORE_VERSION_MAJOR 0
 #define KCORE_VERSION_MINOR 2
-#define KCORE_VERSION_PATCH 0
-#define KCORE_VERSION_STRING "0.2.0"
+#define KCORE_VERSION_PATCH 1
+#define KCORE_VERSION_STRING "0.2.1"
 #define KCORE_ABI_VERSION 1
 
 #if defined(_WIN32)
