@@ -3,12 +3,14 @@
  *
  * Runs every case of <build>/vectors/differential.json (written by tests/gen_vectors.py, one case per
  * line) through kcore_* and compares with the case's `expect`. Chains run at ways 1 and 4. ML-KEM
- * cases run ML-KEM-1024, or ML-KEM-768 when they carry "set":768. Every ML-KEM case checks
+ * cases run ML-KEM-1024, or ML-KEM-768 when they carry "set":768. Every ML-KEM keygen case checks
  * determinism, that sk embeds pk (FIPS 203 dk = dk_pke || ek || H(ek) || z) and that
  * decaps(encaps) returns the shared secret; the canonical cases (the fixture's mlkem1024.keygen and
- * mlkem768.keygen) also pin the public key bytes every SDK derives from the same seed. Finally the
- * invalid-argument contract: -1 and untouched outputs. Prints "SELFTEST ok <n>" or
- * "SELFTEST FAIL <case id>".
+ * mlkem768.keygen) also pin the public key bytes every SDK derives from the same seed, and the ACVP
+ * keygen cases pin both keys. The ACVP sections (NIST sample vectors) also check encapsulation and
+ * decapsulation outputs, implicit rejection of modified ciphertexts, and that kcore refuses keys
+ * that fail the FIPS 203 input checks (-1, outputs untouched). Finally the invalid-argument
+ * contract: -1 and untouched outputs. Prints "SELFTEST ok <n>" or "SELFTEST FAIL <case id>".
  */
 #include "kcore.h"
 #include "vecread.h"
@@ -33,26 +35,104 @@ static const struct mlkem_set MLKEM1024 = {kcore_mlkem1024_keypair, kcore_mlkem1
 static const struct mlkem_set MLKEM768 = {kcore_mlkem768_keypair, kcore_mlkem768_encaps, kcore_mlkem768_decaps,
                                           KCORE_MLKEM768_PK, KCORE_MLKEM768_SK, KCORE_MLKEM768_CT, 1152};
 
-/* Returns 0 when the set is deterministic, sk embeds pk, the optional expected pk hex matches, and
- * decaps(encaps) recovers the shared secret. hex needs room for 2 * m->pk characters. */
+/* Returns 0 when the set is deterministic, sk embeds pk, the optional expected pk and sk hex match,
+ * and decaps(encaps) recovers the shared secret. hex needs room for 2 * m->sk characters. */
 static int check_mlkem(const struct mlkem_set *m, const uint8_t seed[64], const uint8_t coins[32],
-                       const char *expect, size_t elen, char *hex) {
+                       const char *expect, size_t elen, const char *expect_sk, size_t sklen, char *hex) {
     uint8_t pk[KCORE_MLKEM1024_PK], sk[KCORE_MLKEM1024_SK], pk2[KCORE_MLKEM1024_PK], sk2[KCORE_MLKEM1024_SK];
     uint8_t ct[KCORE_MLKEM1024_CT], ct2[KCORE_MLKEM1024_CT];
     uint8_t ss[KCORE_MLKEM_SS], ss2[KCORE_MLKEM_SS], dss[KCORE_MLKEM_SS];
     if (m->keypair(seed, pk, sk) != 0 || m->keypair(seed, pk2, sk2) != 0) return 1;
     if (memcmp(pk, pk2, m->pk) != 0 || memcmp(sk, sk2, m->sk) != 0) return 1;
     if (memcmp(sk + m->pk_offset, pk, m->pk) != 0) return 1;
-    /* Canonical cases carry the byte-frozen public key (cross-SDK KAT). */
+    /* Canonical cases carry the byte-frozen public key (cross-SDK KAT); ACVP cases add sk. */
     if (expect != NULL) {
         if (elen != 2 * m->pk) return 1;
         vr_tohex(pk, m->pk, hex);
         if (memcmp(hex, expect, elen) != 0) return 1;
     }
+    if (expect_sk != NULL) {
+        if (sklen != 2 * m->sk) return 1;
+        vr_tohex(sk, m->sk, hex);
+        if (memcmp(hex, expect_sk, sklen) != 0) return 1;
+    }
     if (m->encaps(pk, coins, ct, ss) != 0 || m->encaps(pk, coins, ct2, ss2) != 0) return 1;
     if (memcmp(ct, ct2, m->ct) != 0 || memcmp(ss, ss2, sizeof ss) != 0) return 1;
     if (m->decaps(ct, sk, dss) != 0 || memcmp(dss, ss, sizeof ss) != 0) return 1;
     return 0;
+}
+
+/* The case's parameter set: ML-KEM-1024 without "set", ML-KEM-768 with "set":768, NULL otherwise. */
+static const struct mlkem_set *pick_set(const char *line) {
+    size_t slen = 0;
+    const char *set = vr_field(line, "set", &slen);
+    if (set == NULL) return &MLKEM1024;
+    if (slen == 3 && memcmp(set, "768", 3) == 0) return &MLKEM768;
+    return NULL;
+}
+
+/* Reads hex field `name` of exactly n bytes into out; 0 on success. */
+static int hex_field(const char *line, const char *name, uint8_t *out, size_t n) {
+    size_t len = 0;
+    const char *v = vr_field(line, name, &len);
+    if (v == NULL || len != 2 * n) return 1;
+    return vr_unhex(v, len, out) != 0;
+}
+
+/* The "valid" field: 1 or 0, or -1 when absent or malformed. */
+static int valid_field(const char *line) {
+    size_t len = 0;
+    const char *v = vr_field(line, "valid", &len);
+    if (v == NULL || len != 1 || (v[0] != '0' && v[0] != '1')) return -1;
+    return v[0] - '0';
+}
+
+/* An entry point's result against a key-check case: 0 for a valid key; for an invalid key -1 with
+ * the 0xA5-filled outputs untouched (first and last byte). */
+static int check_refusal(int rc, int valid, const uint8_t *out1, size_t n1, const uint8_t *out2, size_t n2) {
+    if (valid == 1) return rc != 0;
+    if (rc != -1) return 1;
+    if (out1[0] != 0xA5 || out1[n1 - 1] != 0xA5) return 1;
+    if (out2 != NULL && (out2[0] != 0xA5 || out2[n2 - 1] != 0xA5)) return 1;
+    return 0;
+}
+
+/* ACVP encapsulation (ek, coins, ct, ss) and encapsulation-key-check (ek, valid) cases. */
+static int check_acvp_ek(const struct mlkem_set *m, const char *line, const char *ek, size_t eklen) {
+    uint8_t pk[KCORE_MLKEM1024_PK], coins[KCORE_MLKEM_COINS];
+    uint8_t ct[KCORE_MLKEM1024_CT], ss[KCORE_MLKEM_SS], want_ct[KCORE_MLKEM1024_CT], want_ss[KCORE_MLKEM_SS];
+    size_t ctlen = 0;
+    if (eklen != 2 * m->pk || vr_unhex(ek, eklen, pk) != 0) return 1;
+    if (vr_field(line, "ct", &ctlen) != NULL) {
+        if (hex_field(line, "coins", coins, sizeof coins) != 0) return 1;
+        if (hex_field(line, "ct", want_ct, m->ct) != 0 || hex_field(line, "ss", want_ss, sizeof want_ss) != 0) return 1;
+        if (m->encaps(pk, coins, ct, ss) != 0) return 1;
+        return memcmp(ct, want_ct, m->ct) != 0 || memcmp(ss, want_ss, sizeof ss) != 0;
+    }
+    int valid = valid_field(line);
+    if (valid < 0) return 1;
+    memset(coins, 0, sizeof coins);
+    memset(ct, 0xA5, sizeof ct);
+    memset(ss, 0xA5, sizeof ss);
+    return check_refusal(m->encaps(pk, coins, ct, ss), valid, ct, m->ct, ss, sizeof ss);
+}
+
+/* ACVP decapsulation (dk, ct, ss; includes modified ciphertexts) and decapsulation-key-check
+ * (dk, valid) cases. */
+static int check_acvp_dk(const struct mlkem_set *m, const char *line, const char *dk, size_t dklen) {
+    uint8_t sk[KCORE_MLKEM1024_SK], ct[KCORE_MLKEM1024_CT], ss[KCORE_MLKEM_SS], want_ss[KCORE_MLKEM_SS];
+    size_t sslen = 0;
+    if (dklen != 2 * m->sk || vr_unhex(dk, dklen, sk) != 0) return 1;
+    if (vr_field(line, "ss", &sslen) != NULL) {
+        if (hex_field(line, "ct", ct, m->ct) != 0 || hex_field(line, "ss", want_ss, sizeof want_ss) != 0) return 1;
+        if (m->decaps(ct, sk, ss) != 0) return 1;
+        return memcmp(ss, want_ss, sizeof ss) != 0;
+    }
+    int valid = valid_field(line);
+    if (valid < 0) return 1;
+    memset(ct, 0, sizeof ct);
+    memset(ss, 0xA5, sizeof ss);
+    return check_refusal(m->decaps(ct, sk, ss), valid, ss, sizeof ss, NULL, 0);
 }
 
 static int check_contract(void) {
@@ -104,7 +184,7 @@ int main(int argc, char **argv) {
 
     /* Every buffer lives on the heap: any .bss makes lld emit a file-less PT_LOAD segment, which
      * Docker Desktop's x86_64 emulation fails to map (segfault before main). */
-    enum { IN_CAP = 4096, OUT_CAP = 1048576, WORK_CAP = 64 * 128 };
+    enum { IN_CAP = 8192, OUT_CAP = 1048576, WORK_CAP = 64 * 128 };
     uint8_t *in = malloc(IN_CAP);
     uint8_t *out = malloc(OUT_CAP);
     char *hex = malloc(2 * OUT_CAP);
@@ -143,19 +223,20 @@ int main(int argc, char **argv) {
             memcpy(work, v, len);
             int rc = len == 2048 ? kcore_wots_address(work, addr) : kcore_wots_address_v2(work, addr);
             if (rc != 0 || memcmp(addr, expect, 64) != 0) return fail(id, idlen);
+        } else if ((v = vr_field(line, "ek", &len)) != NULL) {
+            const struct mlkem_set *m = pick_set(line);
+            if (m == NULL || check_acvp_ek(m, line, v, len) != 0) return fail(id, idlen);
+        } else if ((v = vr_field(line, "dk", &len)) != NULL) {
+            const struct mlkem_set *m = pick_set(line);
+            if (m == NULL || check_acvp_dk(m, line, v, len) != 0) return fail(id, idlen);
         } else if ((v = vr_field(line, "seed", &len)) != NULL) {
             uint8_t seed[64], coins[32];
-            size_t clen = 0, slen = 0;
-            const struct mlkem_set *m = &MLKEM1024;
-            if (len != 128 || vr_unhex(v, len, seed) != 0) return fail(id, idlen);
-            const char *c = vr_field(line, "coins", &clen);
-            if (c == NULL || clen != 64 || vr_unhex(c, clen, coins) != 0) return fail(id, idlen);
-            const char *set = vr_field(line, "set", &slen);
-            if (set != NULL) {
-                if (slen != 3 || memcmp(set, "768", 3) != 0) return fail(id, idlen);
-                m = &MLKEM768;
-            }
-            if (check_mlkem(m, seed, coins, expect, elen, hex) != 0) return fail(id, idlen);
+            size_t sklen = 0;
+            const struct mlkem_set *m = pick_set(line);
+            if (m == NULL || len != 128 || vr_unhex(v, len, seed) != 0) return fail(id, idlen);
+            if (hex_field(line, "coins", coins, sizeof coins) != 0) return fail(id, idlen);
+            const char *expect_sk = vr_field(line, "expect_sk", &sklen);
+            if (check_mlkem(m, seed, coins, expect, elen, expect_sk, sklen, hex) != 0) return fail(id, idlen);
         } else if ((v = vr_field(line, "outlen", &len)) != NULL) {
             long outlen = strtol(v, NULL, 10);
             const char *data = vr_field(line, "in", &len);

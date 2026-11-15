@@ -290,7 +290,7 @@ jobs:
         run: |
           set -euo pipefail
           W="dist/knishio-crypto-core-$VERSION-wasm32/kcore.wasm"
-          python3 tests/gen_vectors.py tests/fixtures/cross-platform-test-vectors.json "$RUNNER_TEMP/vectors"
+          python3 tests/gen_vectors.py tests/fixtures/cross-platform-test-vectors.json tests/fixtures/acvp-kcore-vectors.json "$RUNNER_TEMP/vectors"
           out=$(node tests/wasm_check.mjs "$W" "$RUNNER_TEMP/vectors/differential.json")
           echo "$out"
           [ "$out" = "WASMCHECK ok" ]

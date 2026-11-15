@@ -177,11 +177,12 @@ if(KCORE_BUILD_TESTS)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     set(KCORE_VECTORS ${CMAKE_BINARY_DIR}/vectors/differential.json)
     set(KCORE_FIXTURE ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/cross-platform-test-vectors.json)
+    set(KCORE_ACVP_FIXTURE ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/acvp-kcore-vectors.json)
     add_custom_command(
         OUTPUT ${KCORE_VECTORS}
         COMMAND Python3::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/tests/gen_vectors.py
-                ${KCORE_FIXTURE} ${CMAKE_BINARY_DIR}/vectors
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/gen_vectors.py ${KCORE_FIXTURE}
+                ${KCORE_FIXTURE} ${KCORE_ACVP_FIXTURE} ${CMAKE_BINARY_DIR}/vectors
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/gen_vectors.py ${KCORE_FIXTURE} ${KCORE_ACVP_FIXTURE}
         COMMENT "Generating kcore selftest vectors"
         VERBATIM)
     add_custom_target(kcore_vectors ALL DEPENDS ${KCORE_VECTORS})

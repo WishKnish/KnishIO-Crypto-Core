@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """kcore selftest vectors (stdlib only).
 
-Writes <out-dir>/differential.json: seeded differential cases plus a `canonical` section built
-from the cross-platform-test-vectors.json fixture, one case per line so that
-tests/kcore_selftest.c can read it without a JSON library. Each case carries `expect`, computed here
-with hashlib, for the selftest.
+Writes <out-dir>/differential.json: seeded differential cases, a `canonical` section built from the
+cross-platform-test-vectors.json fixture, and an `acvp` section built from the acvp-kcore-vectors.json
+fixture (NIST ACVP sample vectors for ML-KEM-768/1024 and SHAKE-256), one case per line so that
+tests/kcore_selftest.c can read it without a JSON library. Each case carries its expected output.
 
-Usage: gen_vectors.py <cross-platform-test-vectors.json> <out-dir>
+Usage: gen_vectors.py <cross-platform-test-vectors.json> <acvp-kcore-vectors.json> <out-dir>
 """
 import base64
 import hashlib
@@ -91,12 +91,47 @@ def rand_hex(rng, nbytes):
     return bytes(rng.randrange(256) for _ in range(nbytes)).hex()
 
 
+# Coins for the round trip that check_mlkem runs on each ACVP keygen key; ACVP keyGen has none.
+ACVP_COINS = shake_hex(b"kcore.acvp.keygen.coins", 32)
+
+
+def acvp_cases(acvp):
+    """The `acvp` blocks, or None after printing a FAIL line. ML-KEM-1024 cases carry no "set"."""
+    def head(prefix, t):
+        case: dict = {"id": "%s%d_%d" % (prefix, t["parameterSet"], t["tcId"])}
+        if t["parameterSet"] == 768:
+            case["set"] = 768
+        return case
+
+    shake = []
+    for t in acvp["shake256"]:
+        if shake_hex(bytes.fromhex(t["msg"]), t["outLen"]) != t["md"]:
+            print("FAIL acvp shake %d: hashlib disagrees" % t["tcId"], file=sys.stderr)
+            return None
+        shake.append({"id": "as%d" % t["tcId"], "in": t["msg"], "outlen": t["outLen"], "expect": t["md"]})
+    mk = acvp["mlkem"]
+    keygen = [dict(head("akg", t), seed=t["d"] + t["z"], coins=ACVP_COINS, expect=t["ek"], expect_sk=t["dk"])
+              for t in mk["keyGen"]]
+    encaps = [dict(head("aen", t), ek=t["ek"], coins=t["m"], ct=t["c"], ss=t["k"]) for t in mk["encapsulation"]]
+    decaps = [dict(head("ade", t), dk=t["dk"], ct=t["c"], ss=t["k"]) for t in mk["decapsulation"]]
+    ekcheck = [dict(head("aek", t), ek=t["ek"], valid=1 if t["testPassed"] else 0)
+               for t in mk["encapsulationKeyCheck"]]
+    dkcheck = [dict(head("adk", t), dk=t["dk"], valid=1 if t["testPassed"] else 0)
+               for t in mk["decapsulationKeyCheck"]]
+    return [("shake", shake), ("keygen", keygen), ("encaps", encaps), ("decaps", decaps),
+            ("ekcheck", ekcheck), ("dkcheck", dkcheck)]
+
+
 def main():
-    if len(sys.argv) != 3:
-        print("usage: gen_vectors.py <cross-platform-test-vectors.json> <out-dir>", file=sys.stderr)
+    if len(sys.argv) != 4:
+        print("usage: gen_vectors.py <cross-platform-test-vectors.json> <acvp-kcore-vectors.json> <out-dir>",
+              file=sys.stderr)
         return 2
     vectors = json.load(open(sys.argv[1], encoding="utf-8"))["vectors"]
-    out_dir = sys.argv[2]
+    acvp = acvp_cases(json.load(open(sys.argv[2], encoding="utf-8")))
+    if acvp is None:
+        return 2
+    out_dir = sys.argv[3]
     os.makedirs(out_dir, exist_ok=True)
 
     for t in vectors["hash_normalization"]["tests"]:
@@ -194,14 +229,16 @@ def main():
             block("chains", canon_chains),
             block("mlkem", canon_mlkem),
         ]) + "\n}",
+        '"acvp":{\n' + ",\n".join(block(name, cases) for name, cases in acvp) + "\n}",
     ]) + "\n}\n"
     json.loads(doc)  # the line format must stay valid JSON
     with open(os.path.join(out_dir, "differential.json"), "w", encoding="utf-8") as f:
         f.write(doc)
 
-    print("vectors: shake=%d chains=%d address=%d mlkem=%d canonical=%d/%d/%d/%d" % (
+    print("vectors: shake=%d chains=%d address=%d mlkem=%d canonical=%d/%d/%d/%d acvp=%d/%d/%d/%d/%d/%d" % (
         len(shake_cases), len(chain_cases), len(address_cases), len(mlkem_cases),
-        len(canon_shake), len(canon_address), len(canon_chains), len(canon_mlkem)))
+        len(canon_shake), len(canon_address), len(canon_chains), len(canon_mlkem),
+        *(len(cases) for _, cases in acvp)))
     return 0
 
 

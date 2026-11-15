@@ -12,6 +12,16 @@ in the KnishIOClientSDK monorepo.
 
 ## [Unreleased]
 
+### Added
+
+- The selftest and the WASM check run NIST's published ACVP sample vectors
+  (`tests/fixtures/acvp-kcore-vectors.json`, vendored from the monorepo master): ML-KEM-768 and
+  ML-KEM-1024 key generation (both keys), encapsulation, decapsulation including modified-ciphertext
+  implicit rejection, and the FIPS 203 encapsulation- and decapsulation-key checks (an invalid key
+  returns -1 and leaves the outputs untouched), plus byte-aligned SHAKE-256 cases. Passing these
+  sample vectors is not a CAVP validation. `tests/gen_vectors.py` takes the fixture as a new second
+  argument. Library code and the ABI are unchanged.
+
 ## [0.2.1] — 2026-11-12
 
 ### Added
