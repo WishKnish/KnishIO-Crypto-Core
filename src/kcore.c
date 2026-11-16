@@ -49,8 +49,8 @@ static const char kcore_digits[] = "0123456789abcdef";
 
 static void hex_encode(const uint8_t *data, size_t len, char *out) {
     for (size_t i = 0; i < len; i++) {
-        out[2 * i] = kcore_digits[data[i] >> 4];
-        out[2 * i + 1] = kcore_digits[data[i] & 0x0f];
+        out[2 * i] = kcore_digits[(unsigned)data[i] >> 4u];
+        out[2 * i + 1] = kcore_digits[(unsigned)data[i] & 0x0fu];
     }
 }
 

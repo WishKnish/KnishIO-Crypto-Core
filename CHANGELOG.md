@@ -22,6 +22,12 @@ in the KnishIOClientSDK monorepo.
   sample vectors is not a CAVP validation. `tests/gen_vectors.py` takes the fixture as a new second
   argument. Library code and the ABI are unchanged.
 
+### Fixed
+
+- `hex_encode` (`src/kcore.c`) and the tests' `vr_tohex` (`tests/vecread.h`) shift and mask with
+  unsigned operands, so the lint gate stays clean under clang-tidy 23, whose `bugprone-*` set now
+  includes `bugprone-signed-bitwise`. Output is unchanged.
+
 ## [0.2.1] — 2026-11-12
 
 ### Added

@@ -49,8 +49,8 @@ static int vr_unhex(const char *s, size_t len, uint8_t *out) {
 static void vr_tohex(const uint8_t *d, size_t n, char *out) {
     static const char digits[] = "0123456789abcdef";
     for (size_t i = 0; i < n; i++) {
-        out[2 * i] = digits[d[i] >> 4];
-        out[2 * i + 1] = digits[d[i] & 15];
+        out[2 * i] = digits[(unsigned)d[i] >> 4u];
+        out[2 * i + 1] = digits[(unsigned)d[i] & 15u];
     }
 }
 
